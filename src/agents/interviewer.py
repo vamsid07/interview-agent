@@ -29,7 +29,6 @@ class InterviewAgent:
         self.last_brain_output = None
         self.focus_areas_covered = set()
         
-        # Context Memory for Fallbacks
         self.last_focus_topic = "your background"
         self.last_strategy = "OPENING"
         
@@ -60,19 +59,15 @@ class InterviewAgent:
         
         sanitized_response = self.validator.sanitize_response(user_response)
         self.conversation_history.append({"role": "user", "content": sanitized_response})
-        
-        # 1. Reasoning Step
+
         brain_output = self._run_reasoning_step(sanitized_response)
         self.last_brain_output = brain_output
         
-        # Update Context Memory
         self.last_strategy = brain_output.get("strategy", "MOVE_ON")
         self.last_focus_topic = brain_output.get("next_focus", self.last_focus_topic)
-        
-        # 2. Persona Update
+
         self.persona_detector.update_from_llm_analysis(brain_output, sanitized_response)
-        
-        # 3. Generate Response
+
         next_question = self._generate_response_from_strategy(
             self.last_strategy, 
             self.last_focus_topic, 
@@ -111,8 +106,7 @@ class InterviewAgent:
 
         final_prompt = f"{system_prompt}\n\nHistory:\n{history_text}\n\nReasoning: {analysis.get('reasoning')}\nInstruction: {action_instruction}\nGenerate response:"
         response = self.api_client.generate_content(final_prompt)
-        
-        # Context-Aware Fallback Logic
+
         if not response:
             logger.warning("LLM Response failed. Using Context-Aware Fallback.")
             if strategy == "DRILL_DOWN":
