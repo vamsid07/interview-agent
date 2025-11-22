@@ -31,6 +31,9 @@ The platform is designed to address three critical limitations of existing inter
 This system solves these problems through strategic resume analysis, real-time reasoning, and data-driven evaluation.
 
 ---
+## Architecture Diagram
+
+![Architecture Diagram](archi_diag.png)
 
 ## Architecture & Design Philosophy
 
