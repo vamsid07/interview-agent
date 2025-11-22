@@ -30,7 +30,7 @@ The demonstration was conducted primarily using the **Chat interface** for speed
 - Seamless conversation flow in voice-first mode
 
 **Why Chat-First Demo?**
-- Faster iteration through test scenarios (5+ personas in 10 minutes)
+- Faster iteration through test scenarios (4 personas in 5 minutes)
 - Clear visualization of AI reasoning without audio latency
 - Easier demonstration of edge case handling and error recovery
 - Voice mode requires identical backend logic—proven functional in final segment
