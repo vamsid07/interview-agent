@@ -33,7 +33,7 @@ This system solves these problems through strategic resume analysis, real-time r
 ---
 ## Architecture Diagram
 
-![Architecture Diagram](archi_diag.png)
+![Architecture Diagram](archi-diag.png)
 
 ## Architecture & Design Philosophy
 
