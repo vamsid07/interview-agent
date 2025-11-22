@@ -23,7 +23,7 @@ An intelligent, multi-agent interview simulation platform that leverages Large L
 
 The demonstration was conducted primarily using the **Chat interface** for speed and clarity, allowing rapid testing of multiple user personas and edge cases within the 10-minute constraint. 
 
-**🎙️ Voice Mode Capability**: A live **voice interaction example is showcased at the end** of the video, demonstrating:
+** Voice Mode Capability**: A live **voice interaction example is showcased at the end** of the video, demonstrating:
 - Real-time speech recognition using Google Speech API
 - Natural text-to-speech responses with gTTS
 - Audio normalization via PyDub/FFmpeg for reliable transcription
@@ -735,7 +735,7 @@ This transforms the tool from a black-box evaluator to a teaching assistant.
 **Design Philosophy**: Accessibility and realism
 
 - **Chat Mode**: Faster for testing, better for debugging, accessible to those without microphones
-- **🎤 Voice Mode**: More realistic interview simulation, tests verbal communication skills, builds confidence in spoken responses
+- **Voice Mode**: More realistic interview simulation, tests verbal communication skills, builds confidence in spoken responses
 
 Both modes share identical backend logic, ensuring feature parity while accommodating different user preferences and practice scenarios.
 
