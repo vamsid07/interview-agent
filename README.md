@@ -6,7 +6,7 @@ An intelligent, multi-agent interview simulation platform that leverages Large L
 
 ## Demo Video & Live Testing Evidence
 
-**[Watch Full Demo Video (10 minutes)](https://vimeo.com/1139604781?fl=pl&fe=sh)**
+**[Watch Full Demo Video (6 minutes)](https://vimeo.com/1139604781?fl=pl&fe=sh)**
 
 > **Video Structure:**
 > - **First 5 minutes**: Chat-based demonstrations showing multi-persona handling and system intelligence
