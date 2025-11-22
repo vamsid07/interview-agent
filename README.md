@@ -683,28 +683,6 @@ This transforms the tool from a black-box evaluator to a teaching assistant.
 
 **Trade-off**: Llama-3.3-70b is less capable than GPT-4 or Claude for nuanced reasoning, but prompt engineering compensates adequately for this use case.
 
----
-
-## Performance Metrics
-
-### System Performance
-
-- **Average Question Generation Time**: 0.8 seconds (chat mode)
-- **Average Audio Transcription Time**: 1.2 seconds
-- **Evaluation Report Generation Time**: 5-8 seconds (dependent on transcript length)
-- **Resume Analysis Time**: 2-3 seconds
-
-### Conversation Quality Metrics (User Testing)
-
-Tested with 15 users across 3 roles:
-
-**Naturalness Score**: 4.2/5 (users reported interview felt realistic)
-
-**Question Relevance**: 4.5/5 (questions appropriately matched role and experience level)
-
-**Feedback Usefulness**: 4.0/5 (users found coaching tips actionable)
-
-**Audio Quality**: 3.8/5 (STT accuracy 85%; degraded with background noise)
 
 ---
 
