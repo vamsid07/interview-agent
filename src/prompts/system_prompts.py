@@ -109,5 +109,4 @@ def get_robust_evaluation_prompt(role, experience_level, conversation_text, inte
     """
 
 def get_evaluation_prompt(role, experience_level, conversation):
-    # Fallback text prompt
     return f"Evaluate this {role} candidate based on:\n{conversation}"
