@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 import os
-from streamlit.components.v1 import html
+import logging
 
 sys.path.append(str(Path(__file__).parent))
 
@@ -12,6 +12,9 @@ from agents.evaluator import InterviewEvaluator
 from utils.conversation_manager import ConversationManager
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 st.set_page_config(
     page_title="AI Interview Practice",
@@ -27,9 +30,6 @@ if "conversation_manager" not in st.session_state:
     st.session_state.interview_ended = False
     st.session_state.feedback = None
     st.session_state.error_message = None
-    st.session_state.voice_mode = False
-    st.session_state.last_question = None
-    st.session_state.voice_input_counter = 0
 
 st.title("AI Interview Practice Partner")
 st.caption("Practice interviews with adaptive AI feedback")
@@ -51,19 +51,6 @@ with st.sidebar:
     
     st.divider()
     
-    voice_mode = st.toggle(
-        "🎤 Voice Mode",
-        value=st.session_state.voice_mode,
-        help="Enable two-way voice conversation"
-    )
-    st.session_state.voice_mode = voice_mode
-    
-    if voice_mode:
-        st.success("🎙️ Voice conversation enabled")
-        st.caption("Speak your answers using the microphone button")
-    
-    st.divider()
-    
     if not st.session_state.interview_started:
         if st.button("Start New Interview", type="primary", use_container_width=True):
             try:
@@ -76,7 +63,6 @@ with st.sidebar:
                     
                     opening = st.session_state.interviewer.start_interview()
                     st.session_state.conversation_manager.add_message("assistant", opening)
-                    st.session_state.last_question = opening
                     
                     st.session_state.interview_started = True
                     st.session_state.interview_ended = False
@@ -89,8 +75,12 @@ with st.sidebar:
     if st.session_state.interview_started and not st.session_state.interview_ended:
         st.info(f"**Current Interview**\n\nRole: {role}\n\nLevel: {experience_level}")
         
-        progress = min(st.session_state.interviewer.question_count / 6, 1.0)
-        st.progress(progress, text=f"Question {st.session_state.interviewer.question_count} of 6")
+        total_questions = st.session_state.interviewer.get_total_questions()
+        st.metric("Questions Asked", total_questions)
+        
+        if st.session_state.interviewer.response_quality_scores:
+            avg_score = sum(s["score"] for s in st.session_state.interviewer.response_quality_scores) / len(st.session_state.interviewer.response_quality_scores)
+            st.metric("Avg Response Quality", f"{avg_score:.1f}/10")
         
         st.divider()
         
@@ -104,25 +94,16 @@ with st.sidebar:
             st.session_state.interview_started = False
             st.session_state.interview_ended = False
             st.session_state.feedback = None
-            st.session_state.last_question = None
             st.rerun()
     
     st.divider()
     st.markdown("### How to Use")
-    if voice_mode:
-        st.markdown("""
-        1. Click 🎤 Record to speak your answer
-        2. AI will read questions aloud
-        3. Speak naturally and clearly
-        4. Click Stop when done speaking
-        """)
-    else:
-        st.markdown("""
-        1. Select role and experience level
-        2. Click 'Start New Interview'
-        3. Type your answers
-        4. Get detailed feedback at the end
-        """)
+    st.markdown("""
+    1. Select role and experience level
+    2. Click 'Start New Interview'
+    3. Type your answers in the chat
+    4. Get detailed feedback at the end
+    """)
     
     if st.session_state.interview_started:
         st.divider()
@@ -134,7 +115,7 @@ if st.session_state.error_message:
     st.stop()
 
 if not st.session_state.interview_started:
-    st.info("👈 Configure your interview settings in the sidebar and click 'Start New Interview' to begin.")
+    st.info("Configure your interview settings in the sidebar and click 'Start New Interview' to begin.")
     
     with st.expander("About This Tool"):
         st.markdown("""
@@ -143,7 +124,6 @@ if not st.session_state.interview_started:
         - **Adaptive Questioning**: Adjusts to your response style
         - **Intelligent Follow-ups**: Probes deeper when needed
         - **Persona Detection**: Recognizes if you're confused, efficient, or chatty
-        - **Voice Conversation**: Two-way voice interaction for realistic practice
         - **Comprehensive Feedback**: Detailed evaluation with actionable insights
         
         The tool covers three major roles and adapts to different experience levels.
@@ -197,7 +177,6 @@ elif st.session_state.interview_ended:
             st.session_state.interview_started = False
             st.session_state.interview_ended = False
             st.session_state.feedback = None
-            st.session_state.last_question = None
             st.rerun()
     
     with col2:
@@ -212,140 +191,6 @@ elif st.session_state.interview_ended:
             )
 
 else:
-    if st.session_state.voice_mode:
-        voice_component = f"""
-        <div style="position: sticky; top: 60px; z-index: 1000; background: white; padding: 20px; border: 2px solid #0066cc; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <div style="display: flex; gap: 10px;">
-                    <button id="recordBtn" onclick="toggleRecording()" style="padding: 12px 24px; background: #ff4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold;">
-                        🎤 Start Recording
-                    </button>
-                    <button onclick="stopSpeech()" style="padding: 12px 24px; background: #666; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px;">
-                        🔇 Stop Audio
-                    </button>
-                </div>
-                <div id="status" style="color: #0066cc; font-weight: bold; font-size: 16px;">Ready to listen</div>
-            </div>
-            <div id="transcript" style="min-height: 40px; padding: 10px; background: #f5f5f5; border-radius: 4px; font-style: italic; color: #666;">
-                Your speech will appear here...
-            </div>
-        </div>
-        
-        <script>
-            let recognition = null;
-            let isRecording = false;
-            let synth = window.speechSynthesis;
-            
-            if ('webkitSpeechRecognition' in window) {{
-                recognition = new webkitSpeechRecognition();
-                recognition.continuous = false;
-                recognition.interimResults = true;
-                recognition.lang = 'en-US';
-                
-                recognition.onstart = function() {{
-                    document.getElementById('status').textContent = '🎤 Listening...';
-                    document.getElementById('status').style.color = '#00cc00';
-                    document.getElementById('transcript').textContent = 'Speak now...';
-                }};
-                
-                recognition.onresult = function(event) {{
-                    let interimTranscript = '';
-                    let finalTranscript = '';
-                    
-                    for (let i = event.resultIndex; i < event.results.length; i++) {{
-                        const transcript = event.results[i][0].transcript;
-                        if (event.results[i].isFinal) {{
-                            finalTranscript += transcript + ' ';
-                        }} else {{
-                            interimTranscript += transcript;
-                        }}
-                    }}
-                    
-                    if (finalTranscript) {{
-                        document.getElementById('transcript').textContent = finalTranscript;
-                        const input = document.querySelector('input[type="text"]');
-                        if (input) {{
-                            input.value = finalTranscript.trim();
-                            input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                        }}
-                    }} else if (interimTranscript) {{
-                        document.getElementById('transcript').textContent = interimTranscript;
-                    }}
-                }};
-                
-                recognition.onerror = function(event) {{
-                    document.getElementById('status').textContent = '❌ Error: ' + event.error;
-                    document.getElementById('status').style.color = '#ff0000';
-                    isRecording = false;
-                    document.getElementById('recordBtn').textContent = '🎤 Start Recording';
-                    document.getElementById('recordBtn').style.background = '#ff4444';
-                }};
-                
-                recognition.onend = function() {{
-                    if (isRecording) {{
-                        document.getElementById('status').textContent = '✅ Done! Review your answer below';
-                        document.getElementById('status').style.color = '#0066cc';
-                    }}
-                    isRecording = false;
-                    document.getElementById('recordBtn').textContent = '🎤 Start Recording';
-                    document.getElementById('recordBtn').style.background = '#ff4444';
-                }};
-            }} else {{
-                document.getElementById('status').textContent = '❌ Voice recognition not supported in this browser';
-                document.getElementById('status').style.color = '#ff0000';
-            }}
-            
-            function toggleRecording() {{
-                if (!recognition) {{
-                    alert('Voice recognition not supported. Please use Chrome, Edge, or Safari.');
-                    return;
-                }}
-                
-                if (!isRecording) {{
-                    recognition.start();
-                    isRecording = true;
-                    document.getElementById('recordBtn').textContent = '⏹️ Stop Recording';
-                    document.getElementById('recordBtn').style.background = '#00cc00';
-                }} else {{
-                    recognition.stop();
-                    isRecording = false;
-                }}
-            }}
-            
-            function speakText(text) {{
-                if (synth.speaking) {{
-                    synth.cancel();
-                }}
-                
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.rate = 0.9;
-                utterance.pitch = 1.0;
-                utterance.volume = 1.0;
-                
-                const voices = synth.getVoices();
-                const englishVoice = voices.find(v => v.lang.startsWith('en'));
-                if (englishVoice) {{
-                    utterance.voice = englishVoice;
-                }}
-                
-                synth.speak(utterance);
-            }}
-            
-            function stopSpeech() {{
-                synth.cancel();
-            }}
-            
-            if (synth.getVoices().length === 0) {{
-                synth.addEventListener('voiceschanged', function() {{
-                    speakText({repr(st.session_state.last_question or "")});
-                }});
-            }} else {{
-                speakText({repr(st.session_state.last_question or "")});
-            }}
-        </script>
-        """
-        html(voice_component, height=200)
-    
     conversation_history = st.session_state.interviewer.conversation_history
     
     for msg in conversation_history:
@@ -356,7 +201,7 @@ else:
             with st.chat_message("user", avatar="👤"):
                 st.write(msg["content"])
     
-    user_input = st.chat_input("Type your answer here or use voice recording above..." if st.session_state.voice_mode else "Type your answer here...")
+    user_input = st.chat_input("Type your answer here...")
     
     if user_input:
         with st.chat_message("user", avatar="👤"):
@@ -366,15 +211,20 @@ else:
         
         with st.spinner("Thinking..."):
             try:
-                next_question = st.session_state.interviewer.generate_next_question(user_input)
+                next_question, error_type = st.session_state.interviewer.generate_next_question(user_input)
                 
                 with st.chat_message("assistant", avatar="🤖"):
                     st.write(next_question)
                 
                 st.session_state.conversation_manager.add_message("assistant", next_question)
-                st.session_state.last_question = next_question
+                
+                if error_type == "api_error":
+                    st.warning("Note: Using fallback question due to API issues. Your response was recorded.")
+                elif error_type == "validation_error":
+                    st.info("Please review the feedback above and provide a valid response.")
                 
                 st.rerun()
             except Exception as e:
-                st.error(f"Error generating question: {str(e)}")
-                st.info("Please try responding again or end the interview for feedback.")
+                st.error(f"Unexpected error: {str(e)}")
+                st.info("Please try again or end the interview for feedback.")
+                logger.exception("Unexpected error in app")

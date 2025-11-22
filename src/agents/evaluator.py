@@ -1,14 +1,18 @@
-import google.generativeai as genai
 import os
 import sys
 from pathlib import Path
 from typing import List, Dict
 import re
+import logging
 
 sys.path.append(str(Path(__file__).parent.parent))
 
 from prompts.system_prompts import get_evaluation_prompt
 from prompts.evaluation_rubrics import SCORING_CRITERIA, EXPERIENCE_LEVEL_EXPECTATIONS
+from utils.api_client import RobustAPIClient
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class InterviewEvaluator:
     def __init__(self):
@@ -16,10 +20,12 @@ class InterviewEvaluator:
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not found in environment variables")
         
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        self.api_client = RobustAPIClient(api_key)
     
     def generate_final_feedback(self, conversation_history: List[Dict], role: str, experience_level: str) -> str:
+        if not conversation_history or len(conversation_history) < 2:
+            return self._generate_minimal_feedback(role, experience_level)
+        
         conversation_text = self._format_conversation(conversation_history)
         
         evaluation_prompt = get_evaluation_prompt(role, experience_level, conversation_text)
@@ -42,15 +48,47 @@ Provide a structured evaluation with:
 4. Areas for Improvement (3-4 specific, actionable items)
 5. Next Steps (concrete recommendations)
 
-Be specific and reference actual responses from the interview."""
+Be specific and reference actual responses from the interview. Use a professional, constructive tone."""
         
-        try:
-            response = self.model.generate_content(enhanced_prompt)
-            feedback = response.text
-            
-            return self._format_feedback_output(feedback, role, experience_level)
-        except Exception as e:
+        feedback = self.api_client.generate_content(enhanced_prompt)
+        
+        if not feedback:
+            logger.error("API failed to generate feedback, using fallback")
             return self._generate_fallback_feedback(conversation_history, role, experience_level)
+        
+        if not self._validate_feedback_structure(feedback):
+            logger.warning("Generated feedback lacks proper structure, enhancing")
+            feedback = self._enhance_feedback_structure(feedback, role, experience_level)
+        
+        return self._format_feedback_output(feedback, role, experience_level)
+    
+    def _validate_feedback_structure(self, feedback: str) -> bool:
+        required_sections = ['assessment', 'strength', 'improvement', 'recommendation']
+        feedback_lower = feedback.lower()
+        
+        found_sections = sum(1 for section in required_sections if section in feedback_lower)
+        
+        return found_sections >= 3
+    
+    def _enhance_feedback_structure(self, feedback: str, role: str, experience_level: str) -> str:
+        if len(feedback) < 100:
+            return self._generate_fallback_feedback([], role, experience_level)
+        
+        enhanced = f"""## Overall Assessment
+
+{feedback[:300]}
+
+## Key Recommendations
+
+Based on this interview, focus on:
+1. Providing specific examples with measurable outcomes
+2. Using the STAR method (Situation, Task, Action, Result) in your responses
+3. Demonstrating deeper knowledge of {role} competencies
+4. Practicing clear and concise communication
+
+Continue preparing for interviews by researching common questions for {experience_level} level {role} positions."""
+        
+        return enhanced
     
     def _format_criteria(self, criteria: Dict) -> str:
         formatted = []
@@ -82,8 +120,28 @@ Be specific and reference actual responses from the interview."""
         from datetime import datetime
         return datetime.now().strftime("%B %d, %Y")
     
+    def _generate_minimal_feedback(self, role: str, experience_level: str) -> str:
+        return f"""# Interview Feedback Report
+
+**Role:** {role}
+**Experience Level:** {experience_level}
+
+## Assessment
+
+The interview session was too brief to provide comprehensive feedback. To get meaningful evaluation:
+
+1. Answer at least 4-5 questions with detailed responses
+2. Provide specific examples from your experience
+3. Take time to think through your answers
+4. Complete the full interview session
+
+Please start a new interview and engage more fully with the questions."""
+    
     def _generate_fallback_feedback(self, conversation_history: List[Dict], role: str, experience_level: str) -> str:
         candidate_responses = [msg['content'] for msg in conversation_history if msg['role'] == 'user']
+        
+        if not candidate_responses:
+            return self._generate_minimal_feedback(role, experience_level)
         
         total_words = sum(len(response.split()) for response in candidate_responses)
         avg_response_length = total_words // len(candidate_responses) if candidate_responses else 0
@@ -102,21 +160,35 @@ The candidate provided {len(candidate_responses)} responses during the interview
 """
         
         if avg_response_length < 30:
-            feedback += "Responses were generally brief. Consider providing more detailed examples and explanations in future interviews.\n"
+            feedback += """Your responses were generally brief. Consider providing more detailed examples and explanations in future interviews. Aim for 50-100 words per response to demonstrate depth of knowledge and experience.
+
+"""
         elif avg_response_length > 100:
-            feedback += "Responses were detailed and thorough. Ensure key points are communicated clearly and concisely.\n"
+            feedback += """Your responses were detailed and thorough. Ensure key points are communicated clearly and concisely without unnecessary elaboration. Balance depth with brevity.
+
+"""
         else:
-            feedback += "Response length was appropriate, demonstrating good communication balance.\n"
+            feedback += """Response length was appropriate, demonstrating good communication balance. You provided enough detail without being overly verbose.
+
+"""
         
-        feedback += """
-## Recommendations
+        feedback += """## Key Recommendations
 
-1. Practice answering behavioral questions using the STAR method (Situation, Task, Action, Result)
-2. Prepare specific examples from your experience that demonstrate key competencies
-3. Focus on quantifiable achievements and concrete outcomes
-4. Research common interview questions for your target role
+1. **Use the STAR Method**: Structure behavioral answers with Situation, Task, Action, and Result
+2. **Provide Specific Examples**: Back up claims with concrete examples from your experience
+3. **Quantify Achievements**: Include numbers, percentages, or measurable outcomes where possible
+4. **Practice Common Questions**: Research and prepare for typical interview questions for your target role
+5. **Ask Clarifying Questions**: If unsure about a question, ask for clarification rather than guessing
 
-Thank you for participating in this practice interview. Good luck with your future interviews!"""
+## Next Steps
+
+- Review common interview questions for {role} positions at the {experience_level} level
+- Prepare 5-7 strong examples from your experience that demonstrate key competencies
+- Practice articulating your thoughts clearly and concisely
+- Research the companies and roles you're targeting
+- Consider doing mock interviews with peers or mentors
+
+Thank you for participating in this practice interview. With preparation and practice, you'll be well-equipped for real interviews."""
         
         return feedback
     
