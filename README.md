@@ -23,7 +23,7 @@ An intelligent, multi-agent interview simulation platform that leverages Large L
 
 The demonstration was conducted primarily using the **Chat interface** for speed and clarity, allowing rapid testing of multiple user personas and edge cases within the 10-minute constraint. 
 
-** Voice Mode Capability**: A live **voice interaction example is showcased at the end** of the video, demonstrating:
+**Voice Mode Capability**: A live **voice interaction example is showcased at the end** of the video, demonstrating:
 - Real-time speech recognition using Google Speech API
 - Natural text-to-speech responses with gTTS
 - Audio normalization via PyDub/FFmpeg for reliable transcription
