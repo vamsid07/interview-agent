@@ -1,286 +1,128 @@
 # AI Interview Practice Partner
 
-An intelligent, adaptive interview practice agent that conducts realistic mock interviews, adapts to user behavior, and provides comprehensive feedback.
+An intelligent, agentic interview simulation platform designed to help candidates prepare for high-stakes technical and behavioral interviews. This system moves beyond simple chatbot interactions by implementing a multi-agent architecture that reads resumes, formulates strategic interview plans, and adapts its questioning strategy in real-time based on candidate performance.
 
-## Overview
+## Project Overview
 
-This AI-powered agent helps candidates prepare for real-world interviews by simulating professional interview experiences across multiple roles. The system demonstrates adaptive behavior through real-time persona detection, dynamic questioning, and intelligent conversation management.
+This application serves as an automated "Bar Raiser" interviewer. It does not rely on static question banks. Instead, it utilizes a **Reasoning Engine (The Brain)** to analyze every candidate response for depth, clarity, and validity before deciding on the next move—whether to drill down into specifics, clarify a confusing point, or move to a new competency.
 
-## Current Features
+## Key Features
 
-### Core Capabilities
-- **Multi-Role Support**: Software Engineer, Sales Representative, Retail Associate
-- **Experience Level Adaptation**: Entry, Mid, Senior level customization
-- **Dynamic Interview Length**: 4-10 questions based on performance (not fixed)
-- **Intelligent Follow-ups**: Up to 2 consecutive follow-ups based on response quality
-- **Real-time Persona Detection**: Identifies confused, efficient, chatty, or normal users
-- **Comprehensive Feedback**: Detailed evaluation with specific examples and recommendations
-- **Response Validation**: Profanity detection, length validation, gibberish filtering
-- **Robust Error Handling**: Retry logic, rate limiting, graceful degradation
+### 1. Strategic Resume Analysis ("The Architect")
 
-### Adaptive Behaviors
-- **Dynamic Question Selection**: Selects next question based on conversation flow and weak areas
-- **Quality-Based Follow-ups**: Asks follow-ups based on response completeness, not arbitrary limits
-- **Semantic Repetition Detection**: Uses n-gram phrase extraction to detect paraphrased repetitions
-- **Performance-Based Termination**: Ends interview early if candidate performs consistently well
-- **Category Coverage**: Ensures all competency areas are explored before ending
-- **Response Quality Tracking**: Monitors and adapts to response quality trends
+- **Ingestion**: Parses PDF resumes to extract key skills and experiences.
+- **Gap Analysis**: Automatically identifies "Red Flags" (e.g., short tenures, vague project descriptions) and "Focus Areas" before the interview begins.
+- **Custom Planning**: Generates a tailored interview strategy to probe specific claims made in the resume.
 
-### Technical Implementation
-- **API Retry Logic**: Exponential backoff with 3 retry attempts
-- **Rate Limiting**: Request throttling to prevent API quota issues
-- **Input Validation**: Both user input and LLM output validation
-- **Error Recovery**: Multiple fallback levels for API failures
-- **Logging**: Comprehensive logging for debugging and monitoring
-- **Token Management**: Context window management with last 10 messages
+### 2. Agentic Reasoning Loop ("The Brain")
 
-## Architecture
+- **Internal Monologue**: Unlike standard chatbots, this agent "thinks" before it speaks. It evaluates the user's input intent (e.g., Evasive, Efficient, Nervous) and quality.
+- **Dynamic Strategy**: Selects an optimal interaction strategy for each turn:
+  - **DRILL_DOWN**: Demands specific examples if answers are vague.
+  - **GUIDE**: Provides hints if the candidate is stuck.
+  - **MOVE_ON**: Recognizes satisfactory answers and transitions topics.
+- **Glass Box UI**: Visualizes the AI's thought process in real-time via the sidebar, demonstrating agentic behavior.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Streamlit UI Layer                      │
-│  (Chat Interface, Progress Tracking, Statistics)            │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-┌────────────────────────┴────────────────────────────────────┐
-│                   Application Layer                         │
-│                                                              │
-│  ┌──────────────────┐  ┌──────────────────┐               │
-│  │ InterviewAgent   │  │ PersonaDetector  │               │
-│  │ - Dynamic Q Gen  │  │ - Pattern Anal   │               │
-│  │ - Smart Followup │  │ - Adaptation     │               │
-│  │ - Flow Control   │  │ - Engagement     │               │
-│  └──────────────────┘  └──────────────────┘               │
-│                                                              │
-│  ┌──────────────────┐  ┌──────────────────┐               │
-│  │ Evaluator        │  │ ResponseValidator│               │
-│  │ - Feedback Gen   │  │ - Input Checks   │               │
-│  │ - Scoring        │  │ - LLM Validation │               │
-│  └──────────────────┘  └──────────────────┘               │
-│                                                              │
-│  ┌──────────────────┐  ┌──────────────────┐               │
-│  │ RobustAPIClient  │  │ ConversationMgr  │               │
-│  │ - Retry Logic    │  │ - State Mgmt     │               │
-│  │ - Rate Limiting  │  │ - Persistence    │               │
-│  └──────────────────┘  └──────────────────┘               │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-┌────────────────────────┴────────────────────────────────────┐
-│                   LLM Integration Layer                     │
-│              Google Gemini 2.0 Flash API                    │
-└─────────────────────────────────────────────────────────────┘
-```
+### 3. Comprehensive Post-Interview Analytics
 
-## Recent Improvements (v2.0)
+- **Data-Driven Evaluation**: Generates a detailed JSON-based assessment of the candidate.
+- **Visual Analytics**: Displays a Radar Chart scoring the candidate across 5 key dimensions (Technical Depth, Communication, Problem Solving, Culture Fit, Consistency).
+- **Evidence Verification**: Extracts and cites specific quotes from the transcript to justify every score.
 
-### 1. Removed Voice Mode
-**Why**: Browser Web Speech API is unreliable, causes permission issues, and degrades UX. Focus on robust text-based interaction first.
+## Technical Architecture
 
-### 2. Dynamic Interview Length
-**Before**: Fixed 6 questions regardless of performance  
-**After**: 4-10 questions based on response quality, topic coverage, and performance trends
+The system follows a **Planner-Executor-Evaluator** pattern:
 
-### 3. Smart Follow-up System
-**Before**: Maximum 1 follow-up per question  
-**After**: Up to 2 consecutive follow-ups triggered by specific quality issues (brevity, uncertainty, lack of specifics)
-
-### 4. Enhanced Repetition Detection
-**Before**: Simple 70% word overlap  
-**After**: Combined lexical and semantic similarity using n-gram phrase extraction (bigrams, trigrams)
-
-### 5. Comprehensive Validation
-**Added**: 
-- User input validation (profanity, length, gibberish, copy-paste detection)
-- LLM output validation (question structure, refusal detection, error checking)
-- Response sanitization and normalization
-
-### 6. Robust Error Handling
-**Added**:
-- Exponential backoff retry (3 attempts)
-- Rate limit detection and handling
-- Network error recovery
-- Graceful fallbacks at multiple levels
-- Comprehensive logging
-
-### 7. Response Quality Scoring
-**Added**: Multi-dimensional quality assessment considering:
-- Word count and verbosity
-- Uncertainty markers
-- Specific examples and outcomes
-- Structured answers (STAR method)
-- Vagueness indicators
+1. **Input Layer**: Streamlit UI captures Resume (PDF) and User Chat.
+2. **Analysis Layer (The Architect)**:
+   - Model: Llama-3.3-70b (via Groq)
+   - Task: JSON Extraction of skills and gaps.
+3. **Interaction Layer (The Interviewer)**:
+   - Reasoning Step: Analyzes input quality → Outputs Strategy JSON.
+   - Generation Step: Uses Strategy + Context → Generates conversational text.
+4. **Evaluation Layer (The Evaluator)**:
+   - Compiles conversation history + Original Plan.
+   - Generates structured scoring and evidence mapping.
 
 ## Tech Stack
 
-- **Language**: Python 3.9+
-- **UI Framework**: Streamlit
-- **LLM API**: Google Gemini 2.0 Flash (free tier)
-- **State Management**: Session state + JSON persistence
-- **Data Validation**: Custom validation layer
-- **Logging**: Python logging module
-
-## Project Structure
-
-```
-interview-agent/
-├── src/
-│   ├── agents/
-│   │   ├── interviewer.py           # Main agent with adaptive logic
-│   │   ├── evaluator.py             # Feedback generation with validation
-│   │   └── role_configs.py          # Role-specific configurations
-│   ├── prompts/
-│   │   ├── system_prompts.py        # LLM system prompts
-│   │   └── evaluation_rubrics.py   # Scoring criteria
-│   ├── utils/
-│   │   ├── conversation_manager.py  # State and persistence
-│   │   ├── persona_detector.py      # User behavior analysis
-│   │   ├── response_validator.py    # Input/output validation
-│   │   └── api_client.py            # Robust API client with retry
-│   └── app.py                        # Streamlit application
-├── data/
-│   └── conversation_logs/            # Saved interview sessions
-├── requirements.txt
-├── .env.example
-└── README.md
-```
+- **Frontend**: Streamlit (Python)
+- **LLM Inference**: Groq API (Llama-3.3-70b-Versatile) for ultra-low latency.
+- **Data Processing**: PyPDF (Resume parsing), Regex (Sanitization).
+- **Visualization**: Plotly (Radar charts and performance metrics).
+- **Environment**: Python 3.10+
 
 ## Setup Instructions
 
 ### Prerequisites
 
-- Python 3.9 or higher
-- Google API key (free at https://ai.google.dev/)
+- Python 3.10 or higher
+- A free Groq API Key (https://console.groq.com/)
 
 ### Installation
 
-1. Clone the repository
+**Clone the repository**
+
 ```bash
-git clone https://github.com/yourusername/interview-agent.git
+git clone https://github.com/your-username/interview-agent.git
 cd interview-agent
 ```
 
-2. Create and activate virtual environment
+**Create a Virtual Environment**
+
 ```bash
+# Windows
 python -m venv venv
-
-# On Mac/Linux:
-source venv/bin/activate
-
-# On Windows:
 venv\Scripts\activate
+
+# Mac/Linux
+python3 -m venv venv
+source venv/bin/activate
 ```
 
-3. Install dependencies
+**Install Dependencies**
+
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Configure environment variables
-```bash
-cp .env.example .env
+**Configure Environment**
+
+Create a `.env` file in the root directory:
+
+```
+GROQ_API_KEY=gsk_your_actual_key_here
+USE_MOCK_API=False
 ```
 
-Edit `.env` and add your Google API key:
-```
-GOOGLE_API_KEY=your_google_api_key_here
-```
-
-To get a free API key:
-- Visit https://ai.google.dev/
-- Click "Get API key in Google AI Studio"
-- Sign in with Google account
-- Create and copy API key
-
-### Running the Application
+**Run the Application**
 
 ```bash
-python -m streamlit run src/app.py
+streamlit run src/app.py
 ```
 
-The application will open in your browser at `http://localhost:8501`
+## Design Decisions & Trade-offs
 
-## Usage Guide
+### 1. Agentic vs. Static Behavior
 
-### Basic Interview Flow
+**Decision**: We prioritized a "Brain" architecture (Reasoning Loop) over a faster, simpler chatbot.
 
-1. **Configure Interview**
-   - Select job role (Software Engineer / Sales Representative / Retail Associate)
-   - Choose experience level (Entry / Mid / Senior)
+**Reasoning**: Standard LLMs are too agreeable. A real interviewer must be skeptical. The reasoning step allows the AI to critique the user silently and decide to be "tough" when necessary, significantly improving conversational quality and realism.
 
-2. **Start Interview**
-   - Click "Start New Interview"
-   - AI introduces itself and asks opening question
+### 2. Resume-Driven Context
 
-3. **Answer Questions**
-   - Type responses in chat input
-   - AI adapts questioning based on your answers
-   - Watch engagement score and response quality metrics in sidebar
+**Decision**: The interview context is derived primarily from the uploaded resume rather than a generic role description.
 
-4. **Complete Interview**
-   - Interview ends automatically when performance plateaus or 10 questions reached
-   - Can manually end anytime with "End Interview & Get Feedback"
-   - Review comprehensive evaluation with specific examples
+**Reasoning**: High-quality interviews are bespoke. By parsing the resume first, the agent establishes immediate context ("I see you used PyTorch..."), creating a more immersive and personalized experience (The "Intelligence" criteria).
 
-### Response Guidelines
+### 3. Structured vs. Unstructured Evaluation
 
-**For best feedback:**
-- Aim for 50-100 words per response
-- Use the STAR method (Situation, Task, Action, Result)
-- Provide specific examples with measurable outcomes
-- Avoid excessive uncertainty markers ("I'm not sure", "maybe")
-- Stay on topic and be concise
+**Decision**: We force the LLM to output strict JSON for evaluations instead of free text.
 
-**The system will:**
-- Ask clarifying questions if responses are too brief
-- Redirect if you repeat previous answers
-- Request specifics if answers are too general
-- Flag inappropriate or invalid content
+**Reasoning**: This allows us to render quantitative data (Charts/Graphs) which provides objective feedback to the user, rather than a generic "Good job" summary.
 
-## Known Limitations
+## Future Roadmap
 
-1. **LLM Dependency**: Relies on Google Gemini free tier (rate limits may apply during heavy usage)
-2. **No Voice Input**: Text-only interaction (voice was removed due to reliability issues)
-3. **No Persistent User Accounts**: Each session is independent, no login system
-4. **Limited Question Bank**: Predefined fallback questions may repeat in very long interviews
-5. **Basic Persona Detection**: Uses heuristics rather than true behavioral modeling
-6. **No Real-Time Collaboration**: Single-user sessions only
-
-## Future Enhancements
-
-### High Priority
-- Automated test suite with example conversations
-- Structured evaluation output with validated JSON scores
-- True agentic reasoning (planning, reflection, goal-oriented questioning)
-- Privacy policy and data retention documentation
-
-### Medium Priority
-- Industry-specific question banks (FAANG, startups, enterprise)
-- Multi-session progress tracking
-- Comparison with previous attempts
-- Mock technical coding challenges
-
-### Low Priority
-- Multi-language support
-- Team/panel interview simulation
-- Video recording and analysis
-- Integration with job boards
-
-## Contributing
-
-Contributions are welcome. Please:
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Submit a pull request with clear description
-
-## License
-
-MIT License
-
-## Acknowledgments
-
-Built for Eightfold.ai's AI Agent Challenge. Demonstrates practical application of LLM-based conversational agents with real-world constraints and reliability requirements.
-
----
-
-**Current Status**: Production-ready for text-based mock interviews with robust error handling and adaptive behavior. Voice mode removed, test suite pending, structured output validation pending.
+- **Voice Integration**: Implementing real-time STT/TTS (Speech-to-Text) for a fully hands-free experience.
+- **Coding Sandbox**: Adding a live code editor for technical screening questions.
+- **Multi-Persona Configuration**: Allowing users to select "Hostile", "Friendly", or "Neutral" interviewer personalities.

@@ -4,227 +4,168 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 import logging
+import plotly.graph_objects as go
 
 sys.path.append(str(Path(__file__).parent))
 
 from agents.interviewer import InterviewAgent
 from agents.evaluator import InterviewEvaluator
+from agents.resume_analyzer import ResumeAnalyzer
 from utils.conversation_manager import ConversationManager
+from utils.resume_parser import ResumeParser
 
 load_dotenv()
-
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-st.set_page_config(
-    page_title="AI Interview Practice",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="AI Interview Partner", layout="wide")
 
 if "conversation_manager" not in st.session_state:
     st.session_state.conversation_manager = ConversationManager()
     st.session_state.interviewer = None
     st.session_state.evaluator = InterviewEvaluator()
+    st.session_state.resume_analyzer = ResumeAnalyzer()
     st.session_state.interview_started = False
     st.session_state.interview_ended = False
-    st.session_state.feedback = None
-    st.session_state.error_message = None
+    st.session_state.evaluation_report = None # Store structured JSON report
+    st.session_state.resume_text = ""
+    st.session_state.interview_plan = None
 
 st.title("AI Interview Practice Partner")
-st.caption("Practice interviews with adaptive AI feedback")
+st.caption("Agentic Interview Simulation with Strategic Planning")
 
+# --- SIDEBAR ---
 with st.sidebar:
-    st.header("Interview Configuration")
+    st.header("Setup")
+    role = st.selectbox("Target Role", ["Software Engineer", "Sales Representative", "Retail Associate"])
+    level = st.selectbox("Level", ["Entry", "Mid", "Senior"])
     
-    role = st.selectbox(
-        "Select Role",
-        ["Software Engineer", "Sales Representative", "Retail Associate"],
-        help="Choose the job role you want to practice for"
-    )
+    st.divider()
     
-    experience_level = st.selectbox(
-        "Experience Level",
-        ["Entry", "Mid", "Senior"],
-        help="Select your experience level"
-    )
+    uploaded_resume = st.file_uploader("Upload Resume (PDF)", type="pdf")
+    if uploaded_resume and not st.session_state.resume_text:
+        with st.spinner("Reading & Analyzing Resume..."):
+            text = ResumeParser.extract_text(uploaded_resume)
+            if text:
+                st.session_state.resume_text = text
+                plan = st.session_state.resume_analyzer.analyze(role, text)
+                st.session_state.interview_plan = plan
+                st.success("Resume Analyzed!")
     
+    if st.session_state.interview_plan:
+        with st.expander("📋 Interview Strategy", expanded=True):
+            st.caption(f"Candidate: {st.session_state.interview_plan.get('candidate_name', 'Unknown')}")
+            st.markdown("**Focus Areas Detected:**")
+            for area in st.session_state.interview_plan.get('focus_areas', []):
+                st.warning(f"🎯 {area['topic']}")
+                st.caption(f"Reason: {area['reason']}")
+
     st.divider()
     
     if not st.session_state.interview_started:
-        if st.button("Start New Interview", type="primary", use_container_width=True):
+        if st.button("Start Interview", type="primary", use_container_width=True):
             try:
-                api_key = os.getenv("GOOGLE_API_KEY")
-                if not api_key:
-                    st.session_state.error_message = "Google API key not found. Please check your .env file."
-                else:
-                    st.session_state.interviewer = InterviewAgent(role, experience_level)
-                    st.session_state.conversation_manager.initialize_conversation(role, experience_level)
-                    
-                    opening = st.session_state.interviewer.start_interview()
-                    st.session_state.conversation_manager.add_message("assistant", opening)
-                    
-                    st.session_state.interview_started = True
-                    st.session_state.interview_ended = False
-                    st.session_state.feedback = None
-                    st.session_state.error_message = None
-                    st.rerun()
-            except Exception as e:
-                st.session_state.error_message = f"Error starting interview: {str(e)}"
-    
-    if st.session_state.interview_started and not st.session_state.interview_ended:
-        st.info(f"**Current Interview**\n\nRole: {role}\n\nLevel: {experience_level}")
-        
-        total_questions = st.session_state.interviewer.get_total_questions()
-        st.metric("Questions Asked", total_questions)
-        
-        if st.session_state.interviewer.response_quality_scores:
-            avg_score = sum(s["score"] for s in st.session_state.interviewer.response_quality_scores) / len(st.session_state.interviewer.response_quality_scores)
-            st.metric("Avg Response Quality", f"{avg_score:.1f}/10")
-        
-        st.divider()
-        
-        if st.button("End Interview & Get Feedback", use_container_width=True):
-            st.session_state.interview_ended = True
-            st.rerun()
-        
-        if st.button("Cancel Interview", use_container_width=True):
-            st.session_state.conversation_manager = ConversationManager()
-            st.session_state.interviewer = None
-            st.session_state.interview_started = False
-            st.session_state.interview_ended = False
-            st.session_state.feedback = None
-            st.rerun()
-    
-    st.divider()
-    st.markdown("### How to Use")
-    st.markdown("""
-    1. Select role and experience level
-    2. Click 'Start New Interview'
-    3. Type your answers in the chat
-    4. Get detailed feedback at the end
-    """)
-    
-    if st.session_state.interview_started:
-        st.divider()
-        engagement = st.session_state.interviewer.persona_detector.get_engagement_score()
-        st.metric("Engagement Score", f"{engagement:.0%}")
-
-if st.session_state.error_message:
-    st.error(st.session_state.error_message)
-    st.stop()
-
-if not st.session_state.interview_started:
-    st.info("Configure your interview settings in the sidebar and click 'Start New Interview' to begin.")
-    
-    with st.expander("About This Tool"):
-        st.markdown("""
-        This AI-powered interview practice tool helps you prepare for real interviews by:
-        
-        - **Adaptive Questioning**: Adjusts to your response style
-        - **Intelligent Follow-ups**: Probes deeper when needed
-        - **Persona Detection**: Recognizes if you're confused, efficient, or chatty
-        - **Comprehensive Feedback**: Detailed evaluation with actionable insights
-        
-        The tool covers three major roles and adapts to different experience levels.
-        """)
-    
-elif st.session_state.interview_ended:
-    st.success("Interview completed! Generating your comprehensive feedback...")
-    
-    if st.session_state.feedback is None:
-        with st.spinner("Analyzing your interview performance..."):
-            try:
-                conversation_history = st.session_state.interviewer.conversation_history
-                
-                feedback = st.session_state.evaluator.generate_final_feedback(
-                    conversation_history,
-                    role,
-                    experience_level
+                st.session_state.interviewer = InterviewAgent(
+                    role, level, st.session_state.resume_text, st.session_state.interview_plan
                 )
-                st.session_state.feedback = feedback
-                st.session_state.conversation_manager.save_conversation()
-            except Exception as e:
-                st.error(f"Error generating feedback: {str(e)}")
-                st.session_state.feedback = "Unable to generate feedback. Please try again."
-    
-    st.markdown(st.session_state.feedback)
-    
-    st.divider()
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        with st.expander("View Full Transcript"):
-            transcript = st.session_state.conversation_manager.get_formatted_transcript()
-            st.text_area("Transcript", transcript, height=400, label_visibility="collapsed")
-    
-    with col2:
-        with st.expander("Interview Statistics"):
-            stats = st.session_state.interviewer.persona_detector
-            st.metric("Total Responses", len(stats.response_history))
-            st.metric("Average Response Length", f"{sum(stats.response_lengths) // len(stats.response_lengths) if stats.response_lengths else 0} words")
-            st.metric("Engagement Score", f"{stats.get_engagement_score():.0%}")
-    
-    st.divider()
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("Start Another Interview", type="primary", use_container_width=True):
-            st.session_state.conversation_manager = ConversationManager()
-            st.session_state.interviewer = None
-            st.session_state.interview_started = False
-            st.session_state.interview_ended = False
-            st.session_state.feedback = None
-            st.rerun()
-    
-    with col2:
-        if st.button("Download Transcript", use_container_width=True):
-            transcript = st.session_state.conversation_manager.get_formatted_transcript()
-            st.download_button(
-                label="Download as Text",
-                data=transcript,
-                file_name=f"interview_{st.session_state.conversation_manager.session_id}.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
-
-else:
-    conversation_history = st.session_state.interviewer.conversation_history
-    
-    for msg in conversation_history:
-        if msg["role"] == "assistant":
-            with st.chat_message("assistant", avatar="🤖"):
-                st.write(msg["content"])
-        else:
-            with st.chat_message("user", avatar="👤"):
-                st.write(msg["content"])
-    
-    user_input = st.chat_input("Type your answer here...")
-    
-    if user_input:
-        with st.chat_message("user", avatar="👤"):
-            st.write(user_input)
-        
-        st.session_state.conversation_manager.add_message("user", user_input)
-        
-        with st.spinner("Thinking..."):
-            try:
-                next_question, error_type = st.session_state.interviewer.generate_next_question(user_input)
-                
-                with st.chat_message("assistant", avatar="🤖"):
-                    st.write(next_question)
-                
-                st.session_state.conversation_manager.add_message("assistant", next_question)
-                
-                if error_type == "api_error":
-                    st.warning("Note: Using fallback question due to API issues. Your response was recorded.")
-                elif error_type == "validation_error":
-                    st.info("Please review the feedback above and provide a valid response.")
-                
+                st.session_state.conversation_manager.initialize_conversation(role, level)
+                opening = st.session_state.interviewer.start_interview()
+                st.session_state.conversation_manager.add_message("assistant", opening)
+                st.session_state.interview_started = True
+                st.session_state.interview_ended = False
+                st.session_state.evaluation_report = None
                 st.rerun()
             except Exception as e:
-                st.error(f"Unexpected error: {str(e)}")
-                st.info("Please try again or end the interview for feedback.")
-                logger.exception("Unexpected error in app")
+                st.error(f"Error: {e}")
+
+    if st.session_state.interview_started and not st.session_state.interview_ended:
+        if st.session_state.interviewer:
+            thoughts = st.session_state.interviewer.get_latest_thought_process()
+            if thoughts:
+                with st.expander("🧠 AI Thought Process", expanded=True):
+                    st.info(f"**Strategy:** {thoughts.get('strategy', 'N/A')}")
+                    st.markdown(f"*{thoughts.get('reasoning', 'Thinking...')}*")
+
+        if st.button("End Interview", use_container_width=True):
+            st.session_state.interview_ended = True
+            st.rerun()
+
+# --- MAIN AREA ---
+if st.session_state.interview_started and not st.session_state.interview_ended:
+    for msg in st.session_state.interviewer.conversation_history:
+        avatar = "🤖" if msg["role"] == "assistant" else "👤"
+        with st.chat_message(msg["role"], avatar=avatar):
+            st.write(msg["content"])
+            
+    if user_input := st.chat_input("Type your answer..."):
+        with st.chat_message("user", avatar="👤"):
+            st.write(user_input)
+        with st.spinner("Thinking..."):
+            st.session_state.interviewer.generate_next_question(user_input)
+            st.rerun()
+
+elif st.session_state.interview_ended:
+    st.header("🏁 Interview Performance Report")
+    
+    if not st.session_state.evaluation_report:
+        with st.spinner("Compiling Comprehensive Analytics..."):
+            st.session_state.evaluation_report = st.session_state.evaluator.generate_comprehensive_report(
+                st.session_state.interviewer.conversation_history, role, level, st.session_state.interview_plan
+            )
+    
+    report = st.session_state.evaluation_report
+    scores = report.get('scores', {})
+    
+    # Top Metric Row
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Decision", report.get('hiring_decision', 'N/A'))
+    col2.metric("Technical Score", f"{scores.get('technical_depth', 0)}/100")
+    col3.metric("Communication", f"{scores.get('communication_clarity', 0)}/100")
+    
+    st.divider()
+    
+    # Radar Chart
+    chart_col, text_col = st.columns([1, 1])
+    
+    with chart_col:
+        categories = list(scores.keys())
+        values = list(scores.values())
+        
+        fig = go.Figure(data=go.Scatterpolar(
+            r=values,
+            theta=[c.replace('_', ' ').title() for c in categories],
+            fill='toself',
+            name='Candidate Profile'
+        ))
+        fig.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+            showlegend=False,
+            margin=dict(l=40, r=40, t=40, b=40)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with text_col:
+        st.subheader("Executive Summary")
+        st.write(report.get('executive_summary', 'No summary available.'))
+        
+        st.subheader("Coach's Tips 💡")
+        for tip in report.get('feedback', {}).get('coach_tips', []):
+            st.info(tip)
+
+    st.divider()
+    
+    # Detailed Evidence Table
+    st.subheader("Evidence & Verification")
+    evidence = report.get('evidence', [])
+    if evidence:
+        for item in evidence:
+            with st.expander(f"{item.get('verdict', 'Neutral')}: {item.get('claim', 'Claim')}"):
+                st.markdown(f"**Quote:** *\"{item.get('quote', 'N/A')}\"*")
+    else:
+        st.caption("No specific claims verified.")
+        
+    if st.button("Start New Session"):
+        st.session_state.clear()
+        st.rerun()
+
+elif not st.session_state.interview_started:
+    st.info("👈 Upload a resume to see the Strategic Planning Agent in action.")

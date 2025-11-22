@@ -1,115 +1,89 @@
-import google.generativeai as genai
+import os
 import time
 import logging
-from typing import Optional, Dict
-from datetime import datetime
+import json
+import re
+import streamlit as st  # Added for UI error display
+from typing import Optional, Dict, Any
+from groq import Groq
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class RobustAPIClient:
-    def __init__(self, api_key: str, model_name: str = 'gemini-2.0-flash-exp'):
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(model_name)
+    def __init__(self, api_key: Optional[str] = None):
+        # Automatically picks up GROQ_API_KEY from .env if not passed explicitly
+        self.api_key = api_key or os.getenv("GROQ_API_KEY")
+        self.model_name = "llama-3.3-70b-versatile" 
+        self.is_mock = os.getenv("USE_MOCK_API", "False").lower() == "true"
         self.max_retries = 3
-        self.base_delay = 1
-        self.request_count = 0
-        self.last_request_time = None
         
-    def generate_content(self, prompt: str, context: str = "") -> Optional[str]:
-        self._rate_limit_check()
-        
+        if not self.is_mock:
+            if not self.api_key:
+                st.error("🚨 CRITICAL: GROQ_API_KEY is missing from environment variables.")
+                st.stop()
+                
+            try:
+                # Try to initialize the client
+                self.client = Groq(api_key=self.api_key)
+                # Test the connection immediately to catch invalid keys now
+                self.client.models.list() 
+            except Exception as e:
+                logger.error(f"Failed to init Groq client: {e}")
+                st.error(f"🚨 ERROR CONNECTING TO GROQ API: {e}")
+                st.info("Please check your internet connection and verify the API Key is correct.")
+                st.stop() # Stop the app so you can see the error
+        else:
+            self.is_mock = True
+
+    def generate_content(self, prompt: str) -> Optional[str]:
+        if self.is_mock: return self._mock_text()
+
         for attempt in range(self.max_retries):
             try:
-                logger.info(f"API request attempt {attempt + 1}/{self.max_retries}")
-                
-                response = self.model.generate_content(prompt)
-                
-                if not response or not response.text:
-                    logger.warning(f"Empty response on attempt {attempt + 1}")
-                    if attempt < self.max_retries - 1:
-                        self._exponential_backoff(attempt)
-                        continue
-                    return None
-                
-                self.request_count += 1
-                self.last_request_time = datetime.now()
-                
-                logger.info(f"API request successful. Response length: {len(response.text)}")
-                return response.text.strip()
-                
+                completion = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.6,
+                    max_tokens=1024,
+                    top_p=1,
+                    stop=None,
+                    stream=False
+                )
+                return completion.choices[0].message.content.strip()
             except Exception as e:
-                error_type = type(e).__name__
-                error_msg = str(e)
-                
-                logger.error(f"API error on attempt {attempt + 1}: {error_type} - {error_msg}")
-                
-                if self._is_rate_limit_error(e):
-                    logger.warning("Rate limit hit, backing off significantly")
-                    time.sleep(60)
-                    continue
-                
-                if self._is_quota_error(e):
-                    logger.error("API quota exceeded")
-                    return None
-                
-                if self._is_network_error(e):
-                    logger.warning(f"Network error, retrying in {self._get_backoff_delay(attempt)} seconds")
-                    if attempt < self.max_retries - 1:
-                        self._exponential_backoff(attempt)
-                        continue
-                
-                if attempt == self.max_retries - 1:
-                    logger.error(f"All retry attempts failed. Last error: {error_msg}")
-                    return None
-                
-                self._exponential_backoff(attempt)
+                logger.error(f"API Attempt {attempt+1} failed: {e}")
+                time.sleep(2)
         
         return None
-    
-    def _rate_limit_check(self):
-        if self.last_request_time:
-            time_since_last = (datetime.now() - self.last_request_time).total_seconds()
-            if time_since_last < 0.5:
-                sleep_time = 0.5 - time_since_last
-                logger.info(f"Rate limiting: sleeping for {sleep_time:.2f} seconds")
-                time.sleep(sleep_time)
-    
-    def _exponential_backoff(self, attempt: int):
-        delay = self.base_delay * (2 ** attempt)
-        jitter = delay * 0.1
-        total_delay = delay + jitter
-        logger.info(f"Backing off for {total_delay:.2f} seconds")
-        time.sleep(total_delay)
-    
-    def _get_backoff_delay(self, attempt: int) -> float:
-        return self.base_delay * (2 ** attempt)
-    
-    def _is_rate_limit_error(self, error: Exception) -> bool:
-        error_msg = str(error).lower()
-        rate_limit_indicators = [
-            'rate limit', 'too many requests', '429', 'quota',
-            'resource exhausted', 'rate_limit_exceeded'
-        ]
-        return any(indicator in error_msg for indicator in rate_limit_indicators)
-    
-    def _is_quota_error(self, error: Exception) -> bool:
-        error_msg = str(error).lower()
-        quota_indicators = [
-            'quota exceeded', 'insufficient quota', 'billing',
-            'payment required', 'quota limit'
-        ]
-        return any(indicator in error_msg for indicator in quota_indicators)
-    
-    def _is_network_error(self, error: Exception) -> bool:
-        error_types = [
-            'ConnectionError', 'TimeoutError', 'Timeout',
-            'ConnectionResetError', 'BrokenPipeError'
-        ]
-        return type(error).__name__ in error_types
-    
-    def get_stats(self) -> Dict:
-        return {
-            'total_requests': self.request_count,
-            'last_request': self.last_request_time.isoformat() if self.last_request_time else None
-        }
+
+    def generate_json_content(self, prompt: str) -> Optional[Dict[str, Any]]:
+        if self.is_mock: return self._mock_json()
+
+        for attempt in range(self.max_retries):
+            try:
+                completion = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant that outputs ONLY valid JSON."},
+                        {"role": "user", "content": f"{prompt}\n\nRespond ONLY with a JSON object."}
+                    ],
+                    temperature=0.1,
+                    response_format={"type": "json_object"} 
+                )
+                
+                text = completion.choices[0].message.content.strip()
+                return json.loads(text)
+            except Exception as e:
+                logger.error(f"JSON Attempt {attempt+1} failed: {e}")
+                time.sleep(2)
+                
+        return None
+
+    def _mock_text(self):
+        time.sleep(0.5)
+        return "Mock Mode Active. (If you see this, check USE_MOCK_API in .env)"
+
+    def _mock_json(self):
+        time.sleep(0.5)
+        return {"strategy": "MOVE_ON", "reasoning": "Mock Mode", "detected_persona": "Neutral", "focus_areas": []}

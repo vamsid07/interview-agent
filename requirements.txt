@@ -1,4 +1,6 @@
 streamlit==1.40.0
 python-dotenv==1.0.1
 pydantic==2.10.3
-google-generativeai==0.8.3
+groq==0.4.2
+pypdf==3.17.1
+plotly==5.18.0
