@@ -1,6 +1,9 @@
 streamlit==1.40.0
 python-dotenv==1.0.1
 pydantic==2.10.3
-groq==0.4.2
+groq>=0.11.0
 pypdf==3.17.1
 plotly==5.18.0
+SpeechRecognition==3.10.1
+gTTS==2.5.1
+pydub==0.25.1

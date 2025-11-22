@@ -4,53 +4,79 @@ An intelligent, agentic interview simulation platform designed to help candidate
 
 ## Project Overview
 
-This application serves as an automated "Bar Raiser" interviewer. It does not rely on static question banks. Instead, it utilizes a **Reasoning Engine (The Brain)** to analyze every candidate response for depth, clarity, and validity before deciding on the next move—whether to drill down into specifics, clarify a confusing point, or move to a new competency.
+This application serves as an automated "Bar Raiser" interviewer. It utilizes a Reasoning Engine ("The Brain") to analyze every candidate response for depth, clarity, and validity before deciding on the next move—whether to drill down into specifics, clarify a confusing point, or move to a new competency.
 
 ## Key Features
 
 ### 1. Strategic Resume Analysis ("The Architect")
 
 - **Ingestion**: Parses PDF resumes to extract key skills and experiences.
-- **Gap Analysis**: Automatically identifies "Red Flags" (e.g., short tenures, vague project descriptions) and "Focus Areas" before the interview begins.
-- **Custom Planning**: Generates a tailored interview strategy to probe specific claims made in the resume.
+- **Gap Analysis**: Automatically identifies "Red Flags" and "Focus Areas".
+- **Custom Planning**: Generates a tailored interview strategy.
 
 ### 2. Agentic Reasoning Loop ("The Brain")
 
-- **Internal Monologue**: Unlike standard chatbots, this agent "thinks" before it speaks. It evaluates the user's input intent (e.g., Evasive, Efficient, Nervous) and quality.
-- **Dynamic Strategy**: Selects an optimal interaction strategy for each turn:
-  - **DRILL_DOWN**: Demands specific examples if answers are vague.
-  - **GUIDE**: Provides hints if the candidate is stuck.
-  - **MOVE_ON**: Recognizes satisfactory answers and transitions topics.
-- **Glass Box UI**: Visualizes the AI's thought process in real-time via the sidebar, demonstrating agentic behavior.
+- **Internal Monologue**: The agent "thinks" before it speaks, evaluating input intent and quality.
+- **Dynamic Strategy**: Selects strategies like DRILL_DOWN, GUIDE, or MOVE_ON.
+- **Glass Box UI**: Visualizes the AI's thought process in real-time via the sidebar.
 
-### 3. Comprehensive Post-Interview Analytics
+### 3. Voice Interaction Support
 
-- **Data-Driven Evaluation**: Generates a detailed JSON-based assessment of the candidate.
-- **Visual Analytics**: Displays a Radar Chart scoring the candidate across 5 key dimensions (Technical Depth, Communication, Problem Solving, Culture Fit, Consistency).
-- **Evidence Verification**: Extracts and cites specific quotes from the transcript to justify every score.
+- **Speech-to-Text**: Transcribes candidate answers via microphone using Google Speech Recognition.
+- **Text-to-Speech**: Generates realistic audio questions for an immersive interview experience.
+
+## Demo Scenarios & Testing Evidence
+
+This section documents how the agent handles specific user personas, as tested during development.
+
+### 1. The Confused User
+
+**Scenario**: User gives a vague or confused answer like "I'm not sure what you mean."
+
+**Agent Reasoning**: Detected `detected_persona: "Confused"` and triggered `strategy: "GUIDE"`.
+
+**Response**: "Let me rephrase - can you tell me about a time you faced a technical challenge? Think about a specific project."
+
+**Outcome**: Successfully simplified the question without solving it for the user.
+
+### 2. The Evasive User
+
+**Scenario**: User claims "Expert Python" skills but gives a generic definition when asked.
+
+**Agent Reasoning**: Detected `analysis: "Vague definitions, no specific examples"` and triggered `strategy: "DRILL_DOWN"`.
+
+**Response**: "You mentioned Python. Can you walk me through a specific instance where you used a generator or decorator in production?"
+
+**Outcome**: Forced the user to prove their claim.
+
+### 3. The Efficient User
+
+**Scenario**: User provides a comprehensive STAR method response.
+
+**Agent Reasoning**: Detected `detected_persona: "Efficient"` and triggered `strategy: "MOVE_ON"`.
+
+**Response**: "That's a clear example. Let's shift gears to System Design..."
+
+**Outcome**: Kept the interview pace high without unnecessary nagging.
+
+### 4. The Edge Case (Off-Topic)
+
+**Scenario**: User asks "What is the weather like?"
+
+**Agent Reasoning**: Detected `strategy: "CLARIFY"`.
+
+**Response**: "I'm here to conduct your interview. Let's focus on your professional experience. Tell me about your last role."
+
+**Outcome**: Firmly brought the conversation back to the interview context.
 
 ## Technical Architecture
 
-The system follows a **Planner-Executor-Evaluator** pattern:
+The system follows a Planner-Executor-Evaluator pattern:
 
-1. **Input Layer**: Streamlit UI captures Resume (PDF) and User Chat.
-2. **Analysis Layer (The Architect)**:
-   - Model: Llama-3.3-70b (via Groq)
-   - Task: JSON Extraction of skills and gaps.
-3. **Interaction Layer (The Interviewer)**:
-   - Reasoning Step: Analyzes input quality → Outputs Strategy JSON.
-   - Generation Step: Uses Strategy + Context → Generates conversational text.
-4. **Evaluation Layer (The Evaluator)**:
-   - Compiles conversation history + Original Plan.
-   - Generates structured scoring and evidence mapping.
-
-## Tech Stack
-
-- **Frontend**: Streamlit (Python)
-- **LLM Inference**: Groq API (Llama-3.3-70b-Versatile) for ultra-low latency.
-- **Data Processing**: PyPDF (Resume parsing), Regex (Sanitization).
-- **Visualization**: Plotly (Radar charts and performance metrics).
-- **Environment**: Python 3.10+
+- **Input Layer**: Streamlit UI captures Resume (PDF), Chat, and Audio.
+- **Analysis Layer (The Architect)**: Llama-3.3-70b (via Groq) extracts skills and gaps.
+- **Interaction Layer (The Interviewer)**: Reasoning Step → Strategy Selection → Response Generation.
+- **Evaluation Layer (The Evaluator)**: Compiles history → Generates scored report with evidence.
 
 ## Setup Instructions
 
@@ -58,6 +84,7 @@ The system follows a **Planner-Executor-Evaluator** pattern:
 
 - Python 3.10 or higher
 - A free Groq API Key (https://console.groq.com/)
+- **FFmpeg**: Required for audio processing (Install via `brew install ffmpeg` or `apt-get install ffmpeg`).
 
 ### Installation
 
@@ -100,29 +127,3 @@ USE_MOCK_API=False
 ```bash
 streamlit run src/app.py
 ```
-
-## Design Decisions & Trade-offs
-
-### 1. Agentic vs. Static Behavior
-
-**Decision**: We prioritized a "Brain" architecture (Reasoning Loop) over a faster, simpler chatbot.
-
-**Reasoning**: Standard LLMs are too agreeable. A real interviewer must be skeptical. The reasoning step allows the AI to critique the user silently and decide to be "tough" when necessary, significantly improving conversational quality and realism.
-
-### 2. Resume-Driven Context
-
-**Decision**: The interview context is derived primarily from the uploaded resume rather than a generic role description.
-
-**Reasoning**: High-quality interviews are bespoke. By parsing the resume first, the agent establishes immediate context ("I see you used PyTorch..."), creating a more immersive and personalized experience (The "Intelligence" criteria).
-
-### 3. Structured vs. Unstructured Evaluation
-
-**Decision**: We force the LLM to output strict JSON for evaluations instead of free text.
-
-**Reasoning**: This allows us to render quantitative data (Charts/Graphs) which provides objective feedback to the user, rather than a generic "Good job" summary.
-
-## Future Roadmap
-
-- **Voice Integration**: Implementing real-time STT/TTS (Speech-to-Text) for a fully hands-free experience.
-- **Coding Sandbox**: Adding a live code editor for technical screening questions.
-- **Multi-Persona Configuration**: Allowing users to select "Hostile", "Friendly", or "Neutral" interviewer personalities.

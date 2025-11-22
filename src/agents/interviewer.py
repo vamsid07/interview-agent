@@ -1,10 +1,14 @@
 import os
+import logging
 from typing import List, Dict, Tuple, Optional
 from agents.role_configs import QUESTION_BANKS
 from prompts.system_prompts import get_interviewer_prompt, get_reasoning_prompt
 from utils.persona_detector import PersonaDetector
 from utils.response_validator import ResponseValidator
 from utils.api_client import RobustAPIClient
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class InterviewAgent:
     def __init__(self, role: str, experience_level: str, resume_text: str = "", interview_plan: Dict = None):
@@ -25,14 +29,19 @@ class InterviewAgent:
         self.last_brain_output = None
         self.focus_areas_covered = set()
         
+        # Context Memory for Fallbacks
+        self.last_focus_topic = "your background"
+        self.last_strategy = "OPENING"
+        
     def start_interview(self) -> str:
         focus_areas = self.interview_plan.get("focus_areas", [])
         
         if focus_areas:
             first_topic = focus_areas[0]
             self.focus_areas_covered.add(first_topic['topic'])
+            self.last_focus_topic = first_topic['topic']
+            
             candidate_name = self.interview_plan.get('candidate_name', 'Candidate')
-            # Handle case where candidate_name might be None
             if not candidate_name: candidate_name = "Candidate"
                 
             opening = f"Hello {candidate_name}. I've reviewed your resume. I'm particularly interested in {first_topic['topic']} because {first_topic['reason']}. {first_topic['suggested_question']}"
@@ -52,19 +61,23 @@ class InterviewAgent:
         sanitized_response = self.validator.sanitize_response(user_response)
         self.conversation_history.append({"role": "user", "content": sanitized_response})
         
-        # 1. Reasoning
+        # 1. Reasoning Step
         brain_output = self._run_reasoning_step(sanitized_response)
         self.last_brain_output = brain_output
+        
+        # Update Context Memory
+        self.last_strategy = brain_output.get("strategy", "MOVE_ON")
+        self.last_focus_topic = brain_output.get("next_focus", self.last_focus_topic)
         
         # 2. Persona Update
         self.persona_detector.update_from_llm_analysis(brain_output, sanitized_response)
         
-        # 3. Strategy
-        strategy = brain_output.get("strategy", "MOVE_ON")
-        next_focus = brain_output.get("next_focus", "general fit")
-        
-        # 4. Generate Response
-        next_question = self._generate_response_from_strategy(strategy, next_focus, brain_output)
+        # 3. Generate Response
+        next_question = self._generate_response_from_strategy(
+            self.last_strategy, 
+            self.last_focus_topic, 
+            brain_output
+        )
         
         self.conversation_history.append({"role": "assistant", "content": next_question})
         self.question_count += 1
@@ -75,7 +88,7 @@ class InterviewAgent:
         history_text = self._format_conversation_limit(5)
         prompt = get_reasoning_prompt(self.role, self.experience_level, history_text, last_response, self.resume_text)
         result = self.api_client.generate_json_content(prompt)
-        return result or {"strategy": "MOVE_ON", "reasoning": "System Fallback", "detected_persona": "Neutral"}
+        return result or {"strategy": "MOVE_ON", "reasoning": "System Fallback", "detected_persona": "Neutral", "next_focus": "experience"}
 
     def _generate_response_from_strategy(self, strategy: str, focus: str, analysis: Dict) -> str:
         focus_areas = self.interview_plan.get("focus_areas", [])
@@ -91,13 +104,25 @@ class InterviewAgent:
             if next_strategic_topic:
                 action_instruction = f"Move on. The Architect flagged '{next_strategic_topic['topic']}' as a concern ({next_strategic_topic['reason']}). Probe this now."
             else:
-                action_instruction = f"Move on. Ask about {self._select_next_topic()}."
+                topic = self._select_next_topic()
+                action_instruction = f"Move on. Ask about {topic}."
         else:
             action_instruction = f"Strategy: {strategy}. Focus: {focus}."
 
         final_prompt = f"{system_prompt}\n\nHistory:\n{history_text}\n\nReasoning: {analysis.get('reasoning')}\nInstruction: {action_instruction}\nGenerate response:"
         response = self.api_client.generate_content(final_prompt)
-        return response if response else "Tell me more."
+        
+        # Context-Aware Fallback Logic
+        if not response:
+            logger.warning("LLM Response failed. Using Context-Aware Fallback.")
+            if strategy == "DRILL_DOWN":
+                return f"Could you be more specific about {focus}? I'd like to hear a concrete example."
+            elif strategy == "CLARIFY":
+                return f"I'm not sure I understood that part about {focus}. Could you rephrase it?"
+            else:
+                return f"That's interesting. Let's shift gears. Tell me about your experience with {self._select_next_topic()}."
+                
+        return response
 
     def _get_next_strategic_topic(self) -> Optional[Dict]:
         focus_areas = self.interview_plan.get("focus_areas", [])
@@ -114,7 +139,7 @@ class InterviewAgent:
             topic = remaining[0]
             self.topics_covered.add(topic)
             return topic
-        return "professional goals"
+        return "professional challenges"
 
     def _format_conversation_limit(self, limit: int) -> str:
         msgs = self.conversation_history[-limit*2:] 
