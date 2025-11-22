@@ -3,7 +3,6 @@ import os
 import sys
 from pathlib import Path
 from typing import List, Dict, Optional
-import time
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -29,7 +28,8 @@ class InterviewAgent:
         self.persona_detector = PersonaDetector()
         self.system_prompt = get_interviewer_prompt(role, experience_level)
         self.follow_up_count = 0
-        self.max_follow_ups = 2
+        self.max_follow_ups = 1
+        self.asked_questions = set()
         
     def start_interview(self) -> str:
         opening_message = f"""Hello! Thank you for joining this {self.role} interview today. I'm looking forward to learning more about your experience and skills.
@@ -47,7 +47,9 @@ Let's begin. {self._get_opening_question()}"""
     def _get_opening_question(self) -> str:
         questions = QUESTION_BANKS.get(self.role, {}).get("opening", [])
         if questions:
-            return questions[0]
+            question = questions[0]
+            self.asked_questions.add(question.lower()[:50])
+            return question
         return "Tell me about yourself and your relevant experience."
     
     def generate_next_question(self, user_response: Optional[str] = None) -> str:
@@ -62,6 +64,11 @@ Let's begin. {self._get_opening_question()}"""
         persona = self.persona_detector.analyze_response(user_response, self.conversation_history)
         strategy = self.persona_detector.get_interaction_strategy(persona)
         
+        is_repetitive = self._detect_repetition(user_response)
+        
+        if is_repetitive:
+            return self._handle_repetitive_response()
+        
         if self._should_ask_follow_up(user_response, persona):
             self.follow_up_count += 1
             return self._generate_follow_up(user_response, strategy, persona)
@@ -73,6 +80,52 @@ Let's begin. {self._get_opening_question()}"""
             return self._generate_closing()
         
         return self._generate_new_question()
+    
+    def _detect_repetition(self, response: str) -> bool:
+        if len(self.conversation_history) < 4:
+            return False
+        
+        recent_responses = [
+            msg['content'].lower() 
+            for msg in self.conversation_history[-6:] 
+            if msg['role'] == 'user'
+        ]
+        
+        if len(recent_responses) < 2:
+            return False
+        
+        current_lower = response.lower()
+        
+        for prev_response in recent_responses[:-1]:
+            if len(prev_response) > 100 and len(current_lower) > 100:
+                similarity = self._calculate_similarity(prev_response, current_lower)
+                if similarity > 0.7:
+                    return True
+        
+        return False
+    
+    def _calculate_similarity(self, text1: str, text2: str) -> float:
+        words1 = set(text1.split())
+        words2 = set(text2.split())
+        
+        if not words1 or not words2:
+            return 0.0
+        
+        intersection = words1.intersection(words2)
+        union = words1.union(words2)
+        
+        return len(intersection) / len(union)
+    
+    def _handle_repetitive_response(self) -> str:
+        redirection = """I notice you've shared similar information before. Let me ask you something different to explore other aspects of your experience.
+
+Could you tell me about a specific challenge you faced and how you overcame it? Please focus on a particular situation rather than general experience."""
+        
+        self.conversation_history.append({
+            "role": "assistant",
+            "content": redirection
+        })
+        return redirection
     
     def _should_ask_follow_up(self, response: str, persona: str) -> bool:
         if self.follow_up_count >= self.max_follow_ups:
@@ -89,7 +142,7 @@ Let's begin. {self._get_opening_question()}"""
         if persona == "confused" or word_count < 30:
             return True
         
-        uncertainty_markers = ["i'm not sure", "i don't know", "maybe", "i think maybe"]
+        uncertainty_markers = ["i'm not sure", "i don't know", "maybe", "i think maybe", "probably"]
         if any(marker in response.lower() for marker in uncertainty_markers):
             return True
         
@@ -103,7 +156,7 @@ Let's begin. {self._get_opening_question()}"""
         conversation_text = self._format_conversation_for_prompt()
         
         persona_guidance = {
-            "confused": "The candidate seems uncertain. Ask a clarifying question and provide structure or examples to help them.",
+            "confused": "The candidate seems uncertain. Ask a clarifying question with an example to guide them.",
             "efficient": "The candidate is concise. Ask a brief follow-up only if critical information is missing.",
             "chatty": "Acknowledge their response and redirect to the core question.",
             "normal": "Ask a natural follow-up to explore deeper or get specific examples."
@@ -119,7 +172,7 @@ The candidate just responded: "{user_response}"
 Persona detected: {persona}
 Guidance: {persona_guidance.get(persona, persona_guidance['normal'])}
 
-Generate ONE brief, natural follow-up question. Do not ask multiple questions. Keep it conversational and relevant."""
+Generate ONE brief, natural follow-up question. Do not repeat what they already said. Ask for specific examples, outcomes, or details they haven't mentioned. Keep it conversational."""
         
         try:
             response = self.model.generate_content(prompt)
@@ -131,7 +184,7 @@ Generate ONE brief, natural follow-up question. Do not ask multiple questions. K
             })
             return follow_up
         except Exception as e:
-            fallback = "Could you elaborate on that a bit more?"
+            fallback = "Could you provide a specific example of that?"
             self.conversation_history.append({
                 "role": "assistant",
                 "content": fallback
@@ -157,11 +210,18 @@ Conversation so far:
 Interview progress: Question {self.question_count + 1} of 6
 {category_hint}
 
-Generate the next interview question. Make it specific, relevant to {self.role}, and appropriate for {self.experience_level} level. Ask only ONE question."""
+IMPORTANT: Review the conversation above and ask a NEW question that has NOT been asked before. Do not repeat any previous questions. Generate a fresh, relevant question for {self.role} at {self.experience_level} level."""
         
         try:
             response = self.model.generate_content(prompt)
             question = response.text.strip()
+            
+            question_start = question.lower()[:50]
+            
+            if question_start in self.asked_questions:
+                question = self._get_fallback_question()
+            else:
+                self.asked_questions.add(question_start)
             
             self.conversation_history.append({
                 "role": "assistant",
@@ -178,11 +238,40 @@ Generate the next interview question. Make it specific, relevant to {self.role},
     
     def _get_fallback_question(self) -> str:
         fallbacks = {
-            "Software Engineer": "Tell me about a challenging technical problem you solved recently.",
-            "Sales Representative": "Describe your approach to handling objections from potential clients.",
-            "Retail Associate": "How do you handle a situation where a customer is dissatisfied with a product?"
+            "Software Engineer": [
+                "Tell me about a challenging technical problem you solved recently.",
+                "How do you approach debugging a production issue?",
+                "Describe a time you had to learn a new technology quickly.",
+                "How do you handle code reviews and feedback?",
+                "Tell me about a project you're particularly proud of."
+            ],
+            "Sales Representative": [
+                "Describe your approach to handling objections from potential clients.",
+                "Tell me about a time you lost a deal. What did you learn?",
+                "How do you build rapport with new clients?",
+                "Describe your typical sales process from lead to close.",
+                "How do you stay motivated during slow periods?"
+            ],
+            "Retail Associate": [
+                "How do you handle a situation where a customer is dissatisfied with a product?",
+                "Tell me about a time you went above and beyond for a customer.",
+                "How do you balance helping multiple customers at once?",
+                "Describe a time you worked as part of a team.",
+                "How do you handle stress during busy periods?"
+            ]
         }
-        return fallbacks.get(self.role, "Tell me about a challenge you faced in your previous role.")
+        
+        available_fallbacks = [
+            q for q in fallbacks.get(self.role, [])
+            if q.lower()[:50] not in self.asked_questions
+        ]
+        
+        if available_fallbacks:
+            question = available_fallbacks[0]
+            self.asked_questions.add(question.lower()[:50])
+            return question
+        
+        return "What motivates you in your professional career?"
     
     def _generate_closing(self) -> str:
         closing = """Thank you for your thoughtful responses today. That concludes the main part of our interview.
