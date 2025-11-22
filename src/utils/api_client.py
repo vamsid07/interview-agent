@@ -3,7 +3,7 @@ import time
 import logging
 import json
 import re
-import streamlit as st  # Added for UI error display
+import streamlit as st  
 from typing import Optional, Dict, Any
 from groq import Groq
 
@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 class RobustAPIClient:
     def __init__(self, api_key: Optional[str] = None):
-        # Automatically picks up GROQ_API_KEY from .env if not passed explicitly
         self.api_key = api_key or os.getenv("GROQ_API_KEY")
         self.model_name = "llama-3.3-70b-versatile" 
         self.is_mock = os.getenv("USE_MOCK_API", "False").lower() == "true"
@@ -24,15 +23,13 @@ class RobustAPIClient:
                 st.stop()
                 
             try:
-                # Try to initialize the client
                 self.client = Groq(api_key=self.api_key)
-                # Test the connection immediately to catch invalid keys now
                 self.client.models.list() 
             except Exception as e:
                 logger.error(f"Failed to init Groq client: {e}")
                 st.error(f"🚨 ERROR CONNECTING TO GROQ API: {e}")
                 st.info("Please check your internet connection and verify the API Key is correct.")
-                st.stop() # Stop the app so you can see the error
+                st.stop()
         else:
             self.is_mock = True
 
