@@ -18,13 +18,11 @@ class InterviewEvaluator:
         conversation_text = self._format_conversation(conversation_history)
         prompt = get_robust_evaluation_prompt(role, level, conversation_text, interview_plan)
         
-        # Try to get structured JSON
         result = self.api_client.generate_json_content(prompt)
         
         if result:
             return result
         
-        # If JSON fails, try to get text and parse it manually (Graceful Degradation)
         logger.warning("JSON Evaluation failed. Attempting text-based degradation.")
         text_response = self.api_client.generate_content(prompt + "\n\nProvide the report in plain text.")
         
@@ -36,9 +34,8 @@ class InterviewEvaluator:
     def _graceful_degradation(self, text: str) -> Dict[str, Any]:
         """Extracts scores from unstructured text if JSON parsing fails."""
         fallback = self._generate_fallback_report()
-        fallback["executive_summary"] = text[:500] + "..." # Use the text as summary
-        
-        # Attempt to find scores using Regex
+        fallback["executive_summary"] = text[:500] + "..." 
+
         patterns = {
             "technical_depth": r"Technical.*?:?\s*(\d+)/100",
             "communication_clarity": r"Communication.*?:?\s*(\d+)/100",
