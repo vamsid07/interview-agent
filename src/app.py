@@ -20,7 +20,6 @@ logging.basicConfig(level=logging.INFO)
 
 st.set_page_config(page_title="AI Interview Partner", layout="wide")
 
-# --- SESSION STATE INITIALIZATION ---
 if "conversation_manager" not in st.session_state:
     st.session_state.conversation_manager = ConversationManager()
     st.session_state.interviewer = None
@@ -34,14 +33,12 @@ if "conversation_manager" not in st.session_state:
     st.session_state.interview_plan = None
     st.session_state.interaction_mode = "Chat"
     
-    # NEW: State variables to handle audio reset and autoplay
     st.session_state.audio_key = 0 
     st.session_state.latest_audio_response = None
 
 st.title("AI Interview Practice Partner")
 st.caption("Agentic Interview Simulation with Strategic Planning")
 
-# --- SIDEBAR ---
 with st.sidebar:
     st.header("Setup")
     role = st.selectbox("Target Role", ["Software Engineer", "Sales Representative", "Retail Associate"])
@@ -83,8 +80,7 @@ with st.sidebar:
                 st.session_state.interview_started = True
                 st.session_state.interview_ended = False
                 st.session_state.evaluation_report = None
-                
-                # Generate audio for opening if in voice mode
+
                 if st.session_state.interaction_mode == "Voice":
                      audio_response = st.session_state.audio_manager.text_to_speech(opening)
                      st.session_state.latest_audio_response = audio_response
@@ -105,19 +101,15 @@ with st.sidebar:
             st.session_state.interview_ended = True
             st.rerun()
 
-# --- MAIN AREA ---
 if st.session_state.interview_started and not st.session_state.interview_ended:
-    # Display Chat History
     for msg in st.session_state.interviewer.conversation_history:
         avatar = "🤖" if msg["role"] == "assistant" else "👤"
         with st.chat_message(msg["role"], avatar=avatar):
             st.write(msg["content"])
             
-    # INPUT HANDLING
     user_input = None
     
     if st.session_state.interaction_mode == "Voice":
-        # FIX: Use dynamic key to force widget reset after processing
         audio_bytes = st.audio_input("Speak your answer...", key=f"audio_in_{st.session_state.audio_key}")
         if audio_bytes:
             with st.spinner("Transcribing..."):
@@ -127,10 +119,8 @@ if st.session_state.interview_started and not st.session_state.interview_ended:
                 else:
                     st.warning("Could not understand audio. Please try again.")
     else:
-        # Chat Input
         user_input = st.chat_input("Type your answer...")
 
-    # PROCESS INPUT
     if user_input:
         with st.chat_message("user", avatar="👤"):
             st.write(user_input)
@@ -138,18 +128,14 @@ if st.session_state.interview_started and not st.session_state.interview_ended:
         with st.spinner("Thinking..."):
             response, _ = st.session_state.interviewer.generate_next_question(user_input)
             
-            # Handle Audio Response Logic
             if st.session_state.interaction_mode == "Voice":
                 audio_response = st.session_state.audio_manager.text_to_speech(response)
                 if audio_response:
-                    # Store audio to play AFTER the rerun (on fresh UI state)
                     st.session_state.latest_audio_response = audio_response
-                    # Increment key -> This destroys the old audio widget and creates a new empty one
                     st.session_state.audio_key += 1
             
             st.rerun()
-
-    # AUTOPLAY RESPONSE (This runs after the rerun, preventing loops)
+            
     if st.session_state.latest_audio_response:
         st.audio(st.session_state.latest_audio_response, format="audio/mp3", autoplay=True)
         st.session_state.latest_audio_response = None # Clear immediately so it plays only once
@@ -166,7 +152,6 @@ elif st.session_state.interview_ended:
     report = st.session_state.evaluation_report
     scores = report.get('scores', {})
     
-    # Top Metric Row
     col1, col2, col3 = st.columns(3)
     col1.metric("Decision", report.get('hiring_decision', 'N/A'))
     col2.metric("Technical Score", f"{scores.get('technical_depth', 0)}/100")
@@ -174,7 +159,6 @@ elif st.session_state.interview_ended:
     
     st.divider()
     
-    # Radar Chart
     chart_col, text_col = st.columns([1, 1])
     
     with chart_col:
@@ -203,8 +187,7 @@ elif st.session_state.interview_ended:
             st.info(tip)
 
     st.divider()
-    
-    # Detailed Evidence Table
+
     st.subheader("Evidence & Verification")
     evidence = report.get('evidence', [])
     if evidence:
