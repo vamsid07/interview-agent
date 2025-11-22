@@ -15,22 +15,13 @@ class AudioManager:
     def speech_to_text(self, audio_file) -> str:
         """Converts Streamlit audio_input (wav/webm bytes) to text."""
         try:
-            # 1. Load audio using pydub (Handles WebM/WAV differences)
-            # Note: This requires ffmpeg installed on your system
             audio = AudioSegment.from_file(audio_file)
-            
-            # 2. Normalize audio (Mono, 16kHz) for better recognition
             audio = audio.set_channels(1).set_frame_rate(16000)
-            
-            # 3. Export to clean WAV container in memory
             wav_io = io.BytesIO()
             audio.export(wav_io, format="wav")
             wav_io.seek(0)
 
-            # 4. Transcribe
             with sr.AudioFile(wav_io) as source:
-                # Optional: Adjust for noise if recording environment is loud
-                # self.recognizer.adjust_for_ambient_noise(source)
                 audio_data = self.recognizer.record(source)
                 text = self.recognizer.recognize_google(audio_data)
                 logger.info(f"Transcribed: {text}")
