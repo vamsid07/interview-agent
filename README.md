@@ -2,6 +2,50 @@
 
 An intelligent, multi-agent interview simulation platform that leverages Large Language Models to conduct adaptive, context-aware mock interviews for technical and behavioral competency assessment.
 
+---
+
+## Demo Video & Live Testing Evidence
+
+**[Watch Full Demo Video (10 minutes)](https://vimeo.com/1139604781?fl=pl&fe=sh)**
+
+> **Video Structure:**
+> - **First 5 minutes**: Chat-based demonstrations showing multi-persona handling and system intelligence
+> - **Final 1 minute**: **Voice mode live demonstration** with real-time speech-to-text and text-to-speech
+> 
+> **Video Highlights:**
+> - Multi-persona handling (Confused, Efficient, Chatty, Evasive users)
+> - Real-time AI reasoning visualization
+> - Strategic resume analysis in action
+> - Comprehensive evaluation report generation
+> - Live voice interaction showing speech recognition and natural audio responses
+
+### Demo Methodology
+
+The demonstration was conducted primarily using the **Chat interface** for speed and clarity, allowing rapid testing of multiple user personas and edge cases within the 10-minute constraint. 
+
+**🎙️ Voice Mode Capability**: A live **voice interaction example is showcased at the end** of the video, demonstrating:
+- Real-time speech recognition using Google Speech API
+- Natural text-to-speech responses with gTTS
+- Audio normalization via PyDub/FFmpeg for reliable transcription
+- Seamless conversation flow in voice-first mode
+
+**Why Chat-First Demo?**
+- Faster iteration through test scenarios (5+ personas in 10 minutes)
+- Clear visualization of AI reasoning without audio latency
+- Easier demonstration of edge case handling and error recovery
+- Voice mode requires identical backend logic—proven functional in final segment
+
+### Tested User Personas (All Included in Video)
+
+| Persona | Behavior Tested | System Response Demonstrated |
+|---------|----------------|------------------------------|
+| **The Confused User** | Expresses uncertainty about questions | Rephrases with concrete examples, provides scaffolding |
+| **The Efficient User** | Provides STAR-format answers | Recognizes quality, moves to new topics efficiently |
+| **The Chatty User** | Rambling, off-topic responses | Politely interrupts, refocuses on specific aspects |
+| **Invalid Input User** | Empty/gibberish responses | Validates input, requests professional retry |
+
+---
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -229,7 +273,7 @@ Selected for:
 - Native JSON mode support (eliminates parsing errors)
 - 128k context window (accommodates full interview transcripts)
 
-**Audio Processing**:
+**Audio Processing: Voice Mode Components**
 - **Speech-to-Text**: Google Speech Recognition API (via `speech_recognition` library)
 - **Text-to-Speech**: Google Text-to-Speech (`gTTS`)
 - **Audio Normalization**: PyDub with FFmpeg backend
@@ -420,7 +464,7 @@ The system implements real-time persona classification using heuristic + LLM hyb
 ### Prerequisites
 
 - **Python 3.10 or higher**
-- **FFmpeg** (Required for audio processing)
+- **FFmpeg** (Required for voice mode audio processing)
   - macOS: `brew install ffmpeg`
   - Windows: Download from [ffmpeg.org](https://ffmpeg.org/download.html)
   - Linux: `sudo apt-get install ffmpeg`
@@ -508,7 +552,7 @@ In the sidebar:
 1. Click the audio recording button
 2. Speak your answer clearly
 3. Stop recording when finished
-4. System will transcribe and respond
+4. System will transcribe and respond with audio
 
 **Step 5: Review Real-Time Feedback**
 
@@ -611,9 +655,12 @@ Add specialized question banks and evaluation rubrics for:
 - Data Science (statistical reasoning, experiment design)
 - Customer Success (empathy detection, conflict resolution)
 
-**6. Multilingual Support**
+**6. Enhanced Voice Features**
 
-Integrate translation APIs to conduct interviews in non-English languages, expanding accessibility globally.
+- Emotion detection from voice tone
+- Real-time filler word counting ("um," "like," "you know")
+- Speech pace analysis with feedback
+- Multilingual support with translation APIs
 
 ---
 
@@ -683,6 +730,14 @@ This transforms the tool from a black-box evaluator to a teaching assistant.
 
 **Trade-off**: Llama-3.3-70b is less capable than GPT-4 or Claude for nuanced reasoning, but prompt engineering compensates adequately for this use case.
 
+### Why Support Both Chat and Voice?
+
+**Design Philosophy**: Accessibility and realism
+
+- **Chat Mode**: Faster for testing, better for debugging, accessible to those without microphones
+- **🎤 Voice Mode**: More realistic interview simulation, tests verbal communication skills, builds confidence in spoken responses
+
+Both modes share identical backend logic, ensuring feature parity while accommodating different user preferences and practice scenarios.
 
 ---
 
